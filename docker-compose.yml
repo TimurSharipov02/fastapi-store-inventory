@@ -7,6 +7,8 @@ services:
       - postgres
     environment:
       DATABASE_URL: postgresql://user:password@postgres:5432/mydatabase
+    volumes:
+      - ./frontend:/app/frontend  # Монтируем фронтенд
 
   postgres:
     image: postgres:13

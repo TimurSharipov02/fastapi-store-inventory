@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store Inventory</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background: #ff325f;
+        }
+        .header { 
+            background: linear(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        .card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #5a6fd8;
+        }
+        .product-item {
+            background: #f8f9fa;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .stat-card {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>🏪 Store Inventory</h1>
+            <p>Управление складом продуктов</p>
+        </div>
+
+        <div class="container">
+            <!-- Форма добавления продукта -->
+            <div class="card">
+                <h3>Добавить продукт</h3>
+                <div class="form-group">
+                    <label>Название:</label>
+                    <input v-model="newProduct.name" placeholder="Молоко, Хлеб...">
+                </div>
+                <div class="form-group">
+                    <label>Цена:</label>
+                    <input type="number" v-model="newProduct.price" placeholder="2.50" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Количество:</label>
+                    <input type="number" v-model="newProduct.quantity" placeholder="100">
+                </div>
+                <div class="form-group">
+                    <label>Категория:</label>
+                    <select v-model="newProduct.category">
+                        <option value="Dairy">Молочные продукты</option>
+                        <option value="Bakery">Выпечка</option>
+                        <option value="Fruits">Фрукты</option>
+                        <option value="Vegetables">Овощи</option>
+                        <option value="Meat">Мясо</option>
+                        <option value="Beverages">Напитки</option>
+                    </select>
+                </div>
+                <button @click="addProduct">➕ Добавить продукт</button>
+            </div>
+
+            <!-- Список продуктов -->
+            <div class="card">
+                <h3>Продукты на складе ({{ products.length }})</h3>
+                <div v-for="product in products" :key="product.id" class="product-item">
+                    <strong>{{ product.name }}</strong> - {{ product.price }}₽ 
+                    <br><small>Количество: {{ product.quantity }} | Категория: {{ getCategoryName(product.category) }}</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Статистика -->
+        <div class="card" style="margin-top: 2rem;">
+            <h3>📊 Статистика склада</h3>
+            <div class="stats">
+                <div class="stat-card">
+                    <h4>Всего продуктов</h4>
+                    <p style="font-size: 2rem; margin: 0; color: #667eea;">{{ stats.total_products || 0 }}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Общая стоимость</h4>
+                    <p style="font-size: 2rem; margin: 0; color: #28a745;">{{ (stats.total_inventory_value || 0).toFixed(2) }}₽</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+        
+        createApp({
+            setup() {
+                const products = ref([]);
+                const stats = ref({});
+                const newProduct = ref({
+                    name: '',
+                    price: '',
+                    quantity: '',
+                    category: 'Dairy'
+                });
+
+                const categories = {
+                    'Dairy': 'Молочные продукты',
+                    'Bakery': 'Выпечка', 
+                    'Fruits': 'Фрукты',
+                    'Vegetables': 'Овощи',
+                    'Meat': 'Мясо',
+                    'Beverages': 'Напитки'
+                };
+
+                // Базовый URL API - меняй в зависимости от окружения
+                const API_BASE = 'http://localhost:8000';
+
+                async function loadProducts() {
+                    try {
+                        const response = await fetch(`${API_BASE}/products/`);
+                        products.value = await response.json();
+                    } catch (error) {
+                        console.error('Ошибка загрузки продуктов:', error);
+                    }
+                }
+
+                async function loadStats() {
+                    try {
+                        const response = await fetch(`${API_BASE}/stats/`);
+                        stats.value = await response.json();
+                    } catch (error) {
+                        console.error('Ошибка загрузки статистики:', error);
+                    }
+                }
+
+                async function addProduct() {
+                    if (!newProduct.value.name || !newProduct.value.price || !newProduct.value.quantity) {
+                        alert('Заполните все поля!');
+                        return;
+                    }
+
+                    try {
+                        await fetch(`${API_BASE}/products/`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newProduct.value)
+                        });
+
+                        // Сброс формы
+                        newProduct.value = { name: '', price: '', quantity: '', category: 'Dairy' };
+                        
+                        // Перезагрузка данных
+                        loadProducts();
+                        loadStats();
+                    } catch (error) {
+                        alert('Ошибка при добавлении продукта');
+                        console.error(error);
+                    }
+                }
+
+                function getCategoryName(category) {
+                    return categories[category] || category;
+                }
+
+                onMounted(() => {
+                    loadProducts();
+                    loadStats();
+                });
+
+                return {
+                    products,
+                    stats,
+                    newProduct,
+                    addProduct,
+                    getCategoryName
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
